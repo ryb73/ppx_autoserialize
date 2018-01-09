@@ -9,33 +9,65 @@ let module Utils = Utils;
 let module Types = Types;
 let module Devtools = Devtools;
 
-let rec core_type_converter suffix typ => {
-  open Parsetree;
-  open Ast_helper;
-  switch typ.ptyp_desc {
-  | Ptyp_constr {txt} args => {
-    if(Ast_403.Longident.flatten txt == [ "Js", "Json", "t" ]) {
-      simple (Lident ("jsJsonT" ^ suffix));
-    } else {
-      let main = simple (suffixify txt suffix);
-      if (args === []) {
-        main
-      } else {
-        Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
-      };
+let rec
+  core_type_converter suffix { Parsetree.ptyp_desc, ptyp_attributes } => {
+    open Parsetree;
+
+    let customSerializers = ptyp_attributes
+      |> List.find_all (fun ({ Asttypes.txt }, _) => txt == "autoserialize.custom");
+
+    switch customSerializers {
+      | [ (_, payload) ] =>
+        switch payload {
+          | PStr [
+            { pstr_desc:
+              Pstr_eval { pexp_desc:
+                Pexp_tuple [ serializeExp, deserializeExp ]
+              } _
+            }
+          ] => {
+            suffix == "__from_json" ?
+              deserializeExp
+            : suffix == "__to_json" ?
+              serializeExp
+            :
+              standard_core_type_converter suffix ptyp_desc
+          }
+
+          | _ => failwith "invalid payload for autoserialize.custom"
+        };
+
+      | [] => standard_core_type_converter suffix ptyp_desc
+
+
+      | _ => failwith "invalid payload for autoserialize.custom"
     };
   }
-  | Ptyp_var name => {
-    simple (Lident (name ^ "_converter"))
-  }
-  /* TODO serlize the AST & show it here for debugging */
-  | _ => [%expr fun _ => failwith "Unexpected core type, cannot convert"]
-  }
-};
+  and standard_core_type_converter suffix ptyp_desc => {
+    open Ast_helper;
+
+    switch ptyp_desc {
+      | Ptyp_constr {txt} args => {
+        let main = simple (suffixify txt suffix);
+        if (args === []) {
+          main
+        } else {
+          Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
+        };
+      }
+      | Ptyp_var name => {
+        simple (Lident (name ^ "_converter"))
+      }
+      /* TODO serlize the AST & show it here for debugging */
+      | _ => [%expr fun _ => failwith "Unexpected core type, cannot convert"]
+      }
+  };
 
 let make_signatures configs {Parsetree.ptype_name: {txt} as name, ptype_params, ptype_kind, ptype_manifest, ptype_attributes} => {
-  switch ptype_attributes {
-  | [({txt: "noserialize"}, _)] => []
+  let noSerialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "noserialize") ptype_attributes;
+
+  switch noSerialize {
+  | true => []
   | _ => {
     let param_names = List.map
     (fun (typ, _) => {
@@ -66,8 +98,11 @@ let make_signatures configs {Parsetree.ptype_name: {txt} as name, ptype_params, 
 };
 
 let make_converters configs {Parsetree.ptype_name: {txt}, ptype_params, ptype_kind, ptype_manifest, ptype_attributes } => {
-  switch ptype_attributes {
-  | [({txt: "noserialize"}, _)] => []
+  let noSerialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "noserialize") ptype_attributes;
+
+
+  switch noSerialize {
+  | true => []
   | _ => {
 
   let param_names = List.map
