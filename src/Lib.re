@@ -22,7 +22,7 @@ let rec
           | PStr [
             { pstr_desc:
               Pstr_eval { pexp_desc:
-                Pexp_tuple [ serializeExp, deserializeExp ]
+                Pexp_tuple [ serializeExp, deserializeExp, devtoolsExp ]
               } _
             }
           ] => {
@@ -30,37 +30,38 @@ let rec
               deserializeExp
             : suffix == "__to_json" ?
               serializeExp
+            : suffix == "__to_devtools" ?
+              devtoolsExp
             :
-              standard_core_type_converter suffix ptyp_desc
+              failwith ("bad suffix " ^ suffix)
           }
 
-          | _ => failwith "invalid payload for autoserialize.custom"
+          | _ => failwith "invalid payload for autoserialize.custom: expected 3-tuple expression"
         };
 
       | [] => standard_core_type_converter suffix ptyp_desc
 
-
-      | _ => failwith "invalid payload for autoserialize.custom"
+      | _ => failwith "only one autoserialize.custom per expression is allowed"
     };
   }
   and standard_core_type_converter suffix ptyp_desc => {
     open Ast_helper;
 
     switch ptyp_desc {
-      | Ptyp_constr {txt} args => {
-        let main = simple (suffixify txt suffix);
-        if (args === []) {
-          main
-        } else {
-          Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
-        };
-      }
-      | Ptyp_var name => {
-        simple (Lident (name ^ "_converter"))
-      }
-      /* TODO serlize the AST & show it here for debugging */
-      | _ => [%expr fun _ => failwith "Unexpected core type, cannot convert"]
-      }
+    | Ptyp_constr {txt} args => {
+      let main = simple (suffixify txt suffix);
+      if (args === []) {
+        main
+      } else {
+        Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
+      };
+    }
+    | Ptyp_var name => {
+      simple (Lident (name ^ "_converter"))
+    }
+    /* TODO serlize the AST & show it here for debugging */
+    | _ => [%expr fun _ => failwith "Unexpected core type, cannot convert"]
+    }
   };
 
 let make_signatures configs {Parsetree.ptype_name: {txt} as name, ptype_params, ptype_kind, ptype_manifest, ptype_attributes} => {
