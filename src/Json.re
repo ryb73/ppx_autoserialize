@@ -5,6 +5,7 @@ open Migrate_parsetree.Ast_403;
 
 let stringify = {
   prefix: [%str
+    let jsJsonT__to_json j => j;
     let unit__to_json () => Js.Json.string "";
     let int__to_json x => Js.Json.number (float_of_int x);
     let float__to_json = Js.Json.number;
@@ -104,6 +105,7 @@ let stringify = {
 
 let parse = {
   prefix: [%str
+    let jsJsonT__from_json v => Js.Result.Ok v;
     let unit__from_json _ => Js.Result.Ok ();
     let int__from_json x => switch (Js.Json.classify x) {
     | Js.Json.JSONNumber n => Js.Result.Ok (int_of_float n)

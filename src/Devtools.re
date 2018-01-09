@@ -6,6 +6,7 @@ open Migrate_parsetree.Ast_403;
 let config = {
   prefix: [%str
     external to_devtools: 'a => Js.t {.} = "%identity";
+    let jsJsonT__to_devtools = to_devtools;
     let unit__to_devtools = to_devtools;
     let int__to_devtools = to_devtools;
     let float__to_devtools = to_devtools;

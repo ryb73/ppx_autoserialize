@@ -14,12 +14,16 @@ let rec core_type_converter suffix typ => {
   open Ast_helper;
   switch typ.ptyp_desc {
   | Ptyp_constr {txt} args => {
-    let main = simple (suffixify txt suffix);
-    if (args === []) {
-      main
+    if(Ast_403.Longident.flatten txt == [ "Js", "Json", "t" ]) {
+      simple (Lident ("jsJsonT" ^ suffix));
     } else {
-      Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
-    }
+      let main = simple (suffixify txt suffix);
+      if (args === []) {
+        main
+      } else {
+        Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
+      };
+    };
   }
   | Ptyp_var name => {
     simple (Lident (name ^ "_converter"))
