@@ -12,36 +12,57 @@ let module Devtools = Devtools;
 let rec
   core_type_converter suffix { Parsetree.ptyp_desc, ptyp_attributes } => {
     open Parsetree;
+    open Ast_helper;
 
-    let customSerializers = ptyp_attributes
-      |> List.find_all (fun ({ Asttypes.txt }, _) => txt == "autoserialize.custom");
-
-    switch customSerializers {
-      | [ (_, payload) ] =>
-        switch payload {
-          | PStr [
-            { pstr_desc:
-              Pstr_eval { pexp_desc:
-                Pexp_tuple [ serializeExp, deserializeExp, devtoolsExp ]
-              } _
-            }
-          ] => {
-            suffix == "__from_json" ?
-              deserializeExp
-            : suffix == "__to_json" ?
-              serializeExp
-            : suffix == "__to_devtools" ?
-              devtoolsExp
-            :
-              failwith ("bad suffix " ^ suffix)
+    let nullable = ptyp_attributes
+      |> List.exists (fun ({ Asttypes.txt }, _) => txt == "autoserialize.nullable");
+    let falsable = ptyp_attributes
+      |> List.exists (fun ({ Asttypes.txt }, _) => txt == "autoserialize.falsable");
+    if (nullable || falsable) {
+      switch ptyp_desc {
+        | Ptyp_constr {txt} args => {
+          if (Longident.last txt == "option") {
+            let jsonType = (nullable) ? "JSONNull" : "JSONFalse";
+            let jsonIdent = Longident.Ldot (Ldot (Lident "Js") "Json") jsonType;
+            let main = Exp.apply (simple (Lident ("_unwrapped_option" ^ suffix))) [(Asttypes.Nolabel, [%expr Js.Json.JSONNull] /* simple jsonIdent */)];
+            Exp.apply main (List.map (fun arg => (Asttypes.Nolabel, core_type_converter suffix arg)) args)
+          } else {
+            failwith ("expected option (found " ^ (Longident.last txt) ^ ")");
           }
+        }
+        | _ => failwith "autoserialize.nullable and .falsable can only be applied to option"
+      };
+    } else {
+      let customSerializers = ptyp_attributes
+        |> List.find_all (fun ({ Asttypes.txt }, _) => txt == "autoserialize.custom");
 
-          | _ => failwith "invalid payload for autoserialize.custom: expected 3-tuple expression"
-        };
+      switch customSerializers {
+        | [ (_, payload) ] =>
+          switch payload {
+            | PStr [
+              { pstr_desc:
+                Pstr_eval { pexp_desc:
+                  Pexp_tuple [ serializeExp, deserializeExp, devtoolsExp ]
+                } _
+              }
+            ] => {
+              suffix == "__from_json" ?
+                deserializeExp
+              : suffix == "__to_json" ?
+                serializeExp
+              : suffix == "__to_devtools" ?
+                devtoolsExp
+              :
+                failwith ("bad suffix " ^ suffix)
+            }
 
-      | [] => standard_core_type_converter suffix ptyp_desc
+            | _ => failwith "invalid payload for autoserialize.custom: expected 3-tuple expression"
+          };
 
-      | _ => failwith "only one autoserialize.custom per expression is allowed"
+        | [] => standard_core_type_converter suffix ptyp_desc
+
+        | _ => failwith "only one autoserialize.custom per expression is allowed"
+      };
     };
   }
   and standard_core_type_converter suffix ptyp_desc => {

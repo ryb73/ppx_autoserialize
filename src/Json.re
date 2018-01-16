@@ -16,7 +16,11 @@ let stringify = {
     let option__to_json convert value => switch value {
     | None => Js.Json.null
     | Some value => Js.Json.array [|convert value|]
-    }
+    };
+    let _unwrapped_option__to_json noneJson convert value => switch value {
+      | None => (noneJson === Js.Json.JSONNull) ? Js.Json.null : (Js.Json.boolean Js.false_)
+      | Some value => convert value
+    };
   ],
   suffix: "__to_json",
   typ: To [%type: Js.Json.t],
@@ -166,6 +170,15 @@ let parse = {
       }
     | _ => Js.Result.Error None
     };
+    let _unwrapped_option__from_json noneJson convert value =>
+      if (Js.Json.classify value === noneJson) {
+        Js.Result.Ok None;
+      } else {
+        switch (convert value) {
+          | Js.Result.Error v => Js.Result.Error v
+          | Js.Result.Ok value => Js.Result.Ok (Some value)
+        };
+      };
   ],
   suffix: "__from_json",
   typ: From [%type: Js.Json.t],

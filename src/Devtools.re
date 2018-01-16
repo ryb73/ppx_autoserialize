@@ -21,6 +21,7 @@ let config = {
     | None => {"$bs": "optional", "empty": true, "value": Js.Null.empty}
     | Some x => {"$bs": "optional", "empty": false, "value": Js.Null.return (convert x)}
     } |> to_devtools;
+    let _unwrapped_option__to_devtools _ => option__to_devtools;
   ],
   suffix: "__to_devtools",
   typ: To [%type: Js.t {.}],
