@@ -65,10 +65,10 @@ let rec
   };
 
 let make_signatures configs {Parsetree.ptype_name: {txt} as name, ptype_params, ptype_kind, ptype_manifest, ptype_attributes} => {
-  let noSerialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "noserialize") ptype_attributes;
+  let serialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "autoserialize") ptype_attributes;
 
-  switch noSerialize {
-  | true => []
+  switch serialize {
+  | false => []
   | _ => {
     let param_names = List.map
     (fun (typ, _) => {
@@ -99,43 +99,42 @@ let make_signatures configs {Parsetree.ptype_name: {txt} as name, ptype_params, 
 };
 
 let make_converters configs {Parsetree.ptype_name: {txt}, ptype_params, ptype_kind, ptype_manifest, ptype_attributes } => {
-  let noSerialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "noserialize") ptype_attributes;
+  let serialize = List.exists (fun ({ Asttypes.txt }, _) => txt == "autoserialize") ptype_attributes;
 
-
-  switch noSerialize {
-  | true => []
+  switch serialize {
+  | false => []
   | _ => {
 
-  let param_names = List.map
-  (fun (typ, _) => {
-    switch typ.Parsetree.ptyp_desc {
-    | Ptyp_var text => text
-    | _ => assert false
-    }
-  })
-  ptype_params;
-
-  List.map
-  (fun {suffix, variant, record} => {
-    let right = switch ptype_manifest {
-    | Some typ => {
-      [%expr fun value => [%e core_type_converter suffix typ] value]
-    }
-    | None => switch ptype_kind {
-      | Ptype_abstract => [%expr fun value => "type is abstract & cannot be converted"]
-      | Ptype_variant constructors => variant (core_type_converter suffix) constructors txt
-      | Ptype_record labels => record (core_type_converter suffix) labels txt
-      | Ptype_open => [%expr fun value => "type is open & cannot be converted"]
+    let param_names = List.map
+    (fun (typ, _) => {
+      switch typ.Parsetree.ptyp_desc {
+      | Ptyp_var text => text
+      | _ => assert false
       }
-    };
+    })
+    ptype_params;
 
-    Ast_helper.Str.value Nonrecursive [
-      Ast_helper.Vb.mk
-      (left (txt ^ suffix))
-      (paramd_fun param_names right)
-    ]
-  })
-  configs
+    List.map
+    (fun {suffix, variant, record} => {
+      let right = switch ptype_manifest {
+      | Some typ => {
+        [%expr fun value => [%e core_type_converter suffix typ] value]
+      }
+      | None => switch ptype_kind {
+        | Ptype_abstract => [%expr fun value => "type is abstract & cannot be converted"]
+        | Ptype_variant constructors => variant (core_type_converter suffix) constructors txt
+        | Ptype_record labels => record (core_type_converter suffix) labels txt
+        | Ptype_open => [%expr fun value => "type is open & cannot be converted"]
+        }
+      };
+
+      Ast_helper.Str.value Nonrecursive [
+        Ast_helper.Vb.mk
+        (left (txt ^ suffix))
+        (paramd_fun param_names right)
+      ]
+    })
+    configs
 
   }
   }
